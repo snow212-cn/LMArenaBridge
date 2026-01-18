@@ -658,6 +658,16 @@ async def get_recaptcha_v3_token_with_chrome(config: dict) -> Optional[str]:
             {"name": "provisional_user_id", "value": provisional_user_id, "domain": ".lmarena.ai", "path": "/"}
         )
 
+    # Add split cookies if present in config
+    cookie_store = config.get("browser_cookies")
+    if isinstance(cookie_store, dict):
+        v1_0 = str(cookie_store.get("arena-auth-prod-v1.0") or "").strip()
+        v1_1 = str(cookie_store.get("arena-auth-prod-v1.1") or "").strip()
+        if v1_0:
+            cookies.append({"name": "arena-auth-prod-v1.0", "value": v1_0, "domain": "lmarena.ai", "path": "/"})
+        if v1_1:
+            cookies.append({"name": "arena-auth-prod-v1.1", "value": v1_1, "domain": "lmarena.ai", "path": "/"})
+
     async with async_playwright() as p:
         context = await p.chromium.launch_persistent_context(
             user_data_dir=str(profile_dir),
@@ -1213,6 +1223,15 @@ async def fetch_lmarena_stream_via_chrome(
         # arena-auth-prod-v1 is commonly stored as a host-only cookie on `lmarena.ai` (no leading dot).
         desired_cookies.append({"name": "arena-auth-prod-v1", "value": auth_token, "domain": "lmarena.ai", "path": "/"})
 
+    # Inject split cookies if present
+    if isinstance(cookie_store, dict):
+        v1_0 = str(cookie_store.get("arena-auth-prod-v1.0") or "").strip()
+        v1_1 = str(cookie_store.get("arena-auth-prod-v1.1") or "").strip()
+        if v1_0:
+            desired_cookies.append({"name": "arena-auth-prod-v1.0", "value": v1_0, "domain": "lmarena.ai", "path": "/"})
+        if v1_1:
+            desired_cookies.append({"name": "arena-auth-prod-v1.1", "value": v1_1, "domain": "lmarena.ai", "path": "/"})
+
     user_agent = normalize_user_agent_value(config.get("user_agent"))
 
     fetch_url = url
@@ -1689,6 +1708,15 @@ async def fetch_lmarena_stream_via_camoufox(
     if auth_token:
         # arena-auth-prod-v1 is commonly stored as a host-only cookie on `lmarena.ai` (no leading dot).
         desired_cookies.append({"name": "arena-auth-prod-v1", "value": auth_token, "domain": "lmarena.ai", "path": "/"})
+
+    # Inject split cookies if present
+    if isinstance(cookie_store, dict):
+        v1_0 = str(cookie_store.get("arena-auth-prod-v1.0") or "").strip()
+        v1_1 = str(cookie_store.get("arena-auth-prod-v1.1") or "").strip()
+        if v1_0:
+            desired_cookies.append({"name": "arena-auth-prod-v1.0", "value": v1_0, "domain": "lmarena.ai", "path": "/"})
+        if v1_1:
+            desired_cookies.append({"name": "arena-auth-prod-v1.1", "value": v1_1, "domain": "lmarena.ai", "path": "/"})
 
     user_agent = normalize_user_agent_value(config.get("user_agent"))
 
@@ -2904,7 +2932,15 @@ def get_request_headers():
                     config["auth_tokens"] = [token]
                     save_config(config, preserve_auth_tokens=False)
         if not token:
-            raise HTTPException(status_code=500, detail="Arena auth token not set in dashboard.")
+            # Check for split cookies in browser_cookies
+            cookie_store = config.get("browser_cookies")
+            has_split = False
+            if isinstance(cookie_store, dict):
+                if cookie_store.get("arena-auth-prod-v1.0") or cookie_store.get("arena-auth-prod-v1.1"):
+                    has_split = True
+            
+            if not has_split:
+                raise HTTPException(status_code=500, detail="Arena auth token not set in dashboard.")
     
     return get_request_headers_with_token(token)
 
@@ -2947,6 +2983,14 @@ def get_request_headers_with_token(token: str, recaptcha_v3_token: Optional[str]
     _add_cookie("_cfuvid", cfuvid)
     _add_cookie("provisional_user_id", provisional_user_id)
     _add_cookie("arena-auth-prod-v1", token)
+
+    if isinstance(cookie_store, dict):
+        v1_0 = str(cookie_store.get("arena-auth-prod-v1.0") or "").strip()
+        v1_1 = str(cookie_store.get("arena-auth-prod-v1.1") or "").strip()
+        if v1_0:
+            _add_cookie("arena-auth-prod-v1.0", v1_0)
+        if v1_1:
+            _add_cookie("arena-auth-prod-v1.1", v1_1)
 
     headers: dict[str, str] = {
         "Content-Type": "text/plain;charset=UTF-8",
@@ -3604,6 +3648,12 @@ def get_next_auth_token(exclude_tokens: set = None, *, allow_ephemeral_fallback:
                 save_config(config, preserve_auth_tokens=False)
                 auth_tokens = config.get("auth_tokens", [])
         if not auth_tokens:
+            # Check for split cookies in browser_cookies
+            cookie_store = config.get("browser_cookies")
+            if isinstance(cookie_store, dict):
+                if cookie_store.get("arena-auth-prod-v1.0") or cookie_store.get("arena-auth-prod-v1.1"):
+                    return ""
+
             raise HTTPException(status_code=500, detail="No auth tokens configured")
     
     # Filter out excluded tokens
@@ -5278,6 +5328,15 @@ async def camoufox_proxy_worker():
                     desired_cookies.append(
                         {"name": "provisional_user_id", "value": provisional_user_id, "domain": ".lmarena.ai", "path": "/"}
                     )
+
+                # Add split cookies
+                if isinstance(cookie_store, dict):
+                    v1_0 = str(cookie_store.get("arena-auth-prod-v1.0") or "").strip()
+                    v1_1 = str(cookie_store.get("arena-auth-prod-v1.1") or "").strip()
+                    if v1_0:
+                        desired_cookies.append({"name": "arena-auth-prod-v1.0", "value": v1_0, "domain": "lmarena.ai", "path": "/"})
+                    if v1_1:
+                        desired_cookies.append({"name": "arena-auth-prod-v1.1", "value": v1_1, "domain": "lmarena.ai", "path": "/"})
 
                 if desired_cookies:
                     try:
